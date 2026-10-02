@@ -1,0 +1,85 @@
+# -----------------------------------------------------------------------
+# NOTE ON THIS FILE (Phase 1 fix):
+# The original requirements.txt was a raw `pip freeze` of someone's dev
+# environment - 200+ packages, including torch, fastai, spacy, unstructured,
+# and openai, none of which any .py file in this repo actually imports
+# (verified with a grep across all `import`/`from` lines). A frozen
+# environment like that is a portfolio-project red flag: it usually means
+# "it worked on my machine and I never audited why." It also nearly
+# guarantees install failures on a different OS/Python version, since exact
+# pins (e.g. onnxruntime==1.19.2) may not have wheels for your interpreter.
+#
+# This file lists only what's actually imported, with loose (">=") version
+# floors instead of hard pins, so pip can resolve versions that have wheels
+# for whatever Python you're running, rather than failing on an exact old
+# pin. The tradeoff: builds are less byte-for-byte reproducible than a fully
+# pinned freeze. For a portfolio project, "it installs reliably" beats
+# "it's bit-for-bit reproducible" - if you needed the latter (e.g. shipping
+# to prod), you'd pin exact versions with `pip freeze` AFTER confirming this
+# set works, or use a lockfile tool like pip-tools/uv.
+# -----------------------------------------------------------------------
+
+# --- Web framework / API layer ---
+fastapi>=0.115,<0.116
+uvicorn[standard]>=0.34,<0.35
+pydantic>=2.10,<3
+python-multipart>=0.0.9   # required by FastAPI to parse file uploads (/upload/, Phase 5)
+
+# --- RAG orchestration ---
+# Pinned to the 0.2.x line (not the current 0.3.x) because the existing code
+# uses pre-refactor import paths like `langchain.vectorstores.Chroma`.
+# LangChain 0.3 split many of these into separate packages and would need
+# import rewrites throughout the repo - out of scope for "extend, don't
+# rewrite" in Phase 1.
+langchain>=0.2.2,<0.3
+langchain-community>=0.2.3,<0.3
+langchain-text-splitters>=0.2.4,<0.3
+
+# --- Vector store (ChromaDB) + PDF parsing ---
+chromadb>=0.5.0,<0.6
+# chromadb's vector index is the C++ extension chroma-hnswlib. Version 0.7.6
+# stopped publishing a prebuilt win_amd64 wheel (source-only), which makes
+# pip try to compile it and fail without MSVC Build Tools installed. 0.7.5
+# still ships a cp312 Windows wheel, so pinning here avoids requiring every
+# contributor to install a C++ toolchain just to `pip install -r`.
+chroma-hnswlib==0.7.5
+pypdf>=5.2.0
+
+# --- Cosine similarity for /compare/ ---
+scikit-learn>=1.6
+
+# --- Demo UI (Phase 5) ---
+# streamlit-chat (a third-party component) was dropped: Streamlit itself
+# has shipped native st.chat_message/st.chat_input since 1.24 - one fewer
+# dependency, and it's maintained as core Streamlit rather than a
+# community package that can lag behind Streamlit API changes.
+streamlit>=1.42
+# app.py talks to rag_api.py purely over HTTP (see its module docstring for
+# why) using httpx, already a direct dependency above - reusing it here
+# instead of adding `requests` as a second HTTP client library.
+
+# --- Misc ---
+tqdm>=4.67
+pytest>=8.3
+
+# --- Security & ops (Phase 2) ---
+python-dotenv>=1.0        # loads .env into os.environ
+slowapi>=0.1.9             # per-route rate limiting (Flask-Limiter, ported to FastAPI)
+httpx>=0.27                # used directly by /health/ to ping Ollama; also what
+                            # FastAPI's TestClient needs under the hood for tests
+
+# --- Agentic / Corrective RAG (Phase 3) ---
+# Official SDK over a hand-rolled httpx call to Tavily's REST API: it owns
+# the request/response contract (auth header format, param names) so this
+# code doesn't silently break if Tavily changes an implementation detail.
+tavily-python>=0.7
+
+# chromadb needs SQLite >= 3.35. Some Linux base images (e.g. Debian slim,
+# which we'll use for the Docker image in Phase 4) ship an older system
+# sqlite3 than that. pysqlite3-binary bundles a modern SQLite as a drop-in
+# replacement for those environments. It ships no Windows wheels at all, so
+# it's gated to Linux here - on Windows/macOS dev machines the interpreter's
+# built-in sqlite3 is already new enough, and the code (see the try/except
+# around the pysqlite3 shim in rag_api.py/create_db.py/query.py) skips the
+# swap gracefully when the package isn't installed.
+pysqlite3-binary; sys_platform == "linux"
