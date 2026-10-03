@@ -2,7 +2,6 @@
 
 A **Retrieval-Augmented Generation** API that answers questions over your own PDFs, and knows when its own retrieval isn't good enough to trust — falling back to a live web search instead of confidently answering from the wrong context. Built on **FastAPI + ChromaDB + Ollama (Mistral)** via **LangChain**, with API-key auth, rate limiting, Docker Compose, and a Streamlit demo UI.
 
-Forked from [smshelar/rag_pipeline](https://github.com/smshelar/rag_pipeline) and extended in five phases — see the commit history for the full story (each commit message explains the *why*, not just the *what*).
 
 ---
 
